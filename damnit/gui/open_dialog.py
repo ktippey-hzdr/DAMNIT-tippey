@@ -5,12 +5,29 @@ from typing import Optional, Tuple
 from PyQt5.QtCore import QObject, QThread, pyqtSignal
 from PyQt5.QtWidgets import QDialog, QDialogButtonBox, QFileDialog
 
-from ..site_config import find_proposal_dir, load_site_config, proposal_is_required
+from ..site_config import (
+    find_proposal_dir,
+    find_site_config_path,
+    load_site_config,
+    proposal_is_required,
+)
 from .open_dialog_ui import Ui_Dialog
 
 
 def find_proposal(propnum: int) -> Path:
     return find_proposal_dir(propnum)
+
+
+def resolve_site_config_base_dir() -> Path:
+    cwd = Path.cwd()
+    if find_site_config_path(cwd) is not None:
+        return cwd
+
+    home = Path.home()
+    if find_site_config_path(home) is not None:
+        return home
+
+    return cwd
 
 
 class ProposalFinder(QObject):
@@ -34,7 +51,8 @@ class OpenDBDialog(QDialog):
         super().__init__(parent)
         self.ui = Ui_Dialog()
         self.ui.setupUi(self)
-        self._proposal_required = proposal_is_required(Path.cwd())
+        self._site_config_base_dir = resolve_site_config_base_dir()
+        self._proposal_required = proposal_is_required(self._site_config_base_dir)
         self._configure_for_site_profile()
         self.ui.buttonBox.button(QDialogButtonBox.StandardButton.Ok).setEnabled(False)
         self.ui.proposal_rb.toggled.connect(self.update_ok)
@@ -57,7 +75,9 @@ class OpenDBDialog(QDialog):
         if self._proposal_required:
             return
 
-        lab_name = str(load_site_config().get("lab", {}).get("name", "")).strip()
+        lab_name = str(
+            load_site_config(self._site_config_base_dir).get("lab", {}).get("name", "")
+        ).strip()
         self.ui.proposal_rb.setChecked(False)
         self.ui.folder_rb.setChecked(True)
         self.ui.proposal_rb.hide()

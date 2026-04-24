@@ -941,7 +941,31 @@ def test_open_dialog_hides_proposal_for_non_proposal_sites(monkeypatch, qtbot):
     monkeypatch.setattr("damnit.gui.open_dialog.proposal_is_required", lambda _: False)
     monkeypatch.setattr(
         "damnit.gui.open_dialog.load_site_config",
-        lambda: {"lab": {"name": "HZDR"}},
+        lambda *_: {"lab": {"name": "HZDR"}},
+    )
+
+    dlg = OpenDBDialog()
+    qtbot.addWidget(dlg)
+
+    assert dlg.ui.proposal_rb.isHidden()
+    assert dlg.ui.proposal_edit.isHidden()
+    assert dlg.ui.folder_rb.isChecked()
+    assert dlg.ui.folder_rb.text() == "Open HZDR DAMNIT folder:"
+
+
+def test_open_dialog_prefers_home_site_config_when_cwd_has_none(monkeypatch, qtbot, tmp_path):
+    home_dir = tmp_path / "home"
+    home_dir.mkdir()
+
+    monkeypatch.setattr("damnit.gui.open_dialog.Path.home", lambda: home_dir)
+    monkeypatch.setattr(
+        "damnit.gui.open_dialog.find_site_config_path",
+        lambda base: None if base == Path.cwd() else home_dir / ".damnit/site.json",
+    )
+    monkeypatch.setattr("damnit.gui.open_dialog.proposal_is_required", lambda base: base != home_dir)
+    monkeypatch.setattr(
+        "damnit.gui.open_dialog.load_site_config",
+        lambda base: {"lab": {"name": "HZDR"}} if base == home_dir else {},
     )
 
     dlg = OpenDBDialog()
