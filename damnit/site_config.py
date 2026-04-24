@@ -141,8 +141,8 @@ HZDR_SITE_CONFIG_TEMPLATE = {
         "mongodb": {
             "labfrog": {
                 "uri": "$DAMNIT_MONGODB_LABFROG_URI",
-                "database": "labfrog",
-                "collection": "shotsheet",
+                "database": "shotsheet",
+                "collection": "shots",
             }
         },
         "planned_ingest": {

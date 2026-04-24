@@ -24,8 +24,8 @@ def test_load_site_config_expands_env(tmp_path):
                     "mongodb": {
                         "labfrog": {
                             "uri": "$MONGO_URI",
-                            "database": "labfrog",
-                            "collection": "shotsheet",
+                            "database": "shotsheet",
+                            "collection": "shots",
                         }
                     }
                 },
