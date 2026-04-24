@@ -4,6 +4,24 @@
 
 [Full Changelog](https://github.com/European-XFEL/DAMNIT/compare/0.3.0...HEAD)
 
+Added:
+
+- Core: Added `damnit-site.json` + `.damnit.env` based multi-lab configuration
+  with XFEL defaults and HZDR template support.
+- CLI: Added `damnit site-config init/show` for bootstrapping and inspecting
+  site configuration.
+- Core: Added context helpers for MongoDB-backed variables
+  (`mongo_find*`, `mongo_*_cell`) and a starter HZDR LabFrog context template.
+- CLI: Added `damnit sample-data` to generate synthetic run data for smoke
+  testing deployments without live instrument streams.
+
+Changed:
+
+- Backend listener/Kafka configuration now resolves from site config instead of
+  hardcoded XFEL broker/topic profiles.
+- Database initialization can now run without a fixed proposal when
+  `lab.proposal_required=false`.
+
 ## [0.3.0]
 
 Added:

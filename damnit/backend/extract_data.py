@@ -27,7 +27,7 @@ import numpy as np
 from kafka import KafkaProducer
 
 from ..context import ContextFile, RunData
-from ..definitions import UPDATE_BROKERS, FILE_SUBMIT_TOPIC
+from ..site_config import get_file_submit_topic, get_update_brokers
 from .db import DamnitDB, ReducedData, BlobTypes, MsgKind, msg_dict
 from .extraction_control import ExtractionRequest, ExtractionSubmitter
 
@@ -157,10 +157,10 @@ def add_to_db(reduced_data, db: DamnitDB, proposal, run, provenance):
 def notify_new_file(damnit_dir, proposal: int, run: int, file_path: str):
     msg = file_submit_msg(damnit_dir, proposal, run, file_path)
     prod = KafkaProducer(
-        bootstrap_servers=UPDATE_BROKERS,
+        bootstrap_servers=get_update_brokers(damnit_dir),
         value_serializer=lambda d: json.dumps(d).encode('utf-8')
     )
-    prod.send(FILE_SUBMIT_TOPIC, msg)
+    prod.send(get_file_submit_topic(damnit_dir), msg)
     prod.flush(timeout=10)
 
 
@@ -183,9 +183,10 @@ class Extractor:
 
     def __init__(self, sandbox_args=None, connect_to_kafka=True):
         self.db = DamnitDB()
+        self._base_dir = self.db.path.parent
         if connect_to_kafka:
             self.kafka_prd = KafkaProducer(
-                bootstrap_servers=UPDATE_BROKERS,
+                bootstrap_servers=get_update_brokers(self._base_dir),
                 value_serializer=lambda d: json.dumps(d).encode('utf-8'),
             )
         else:
@@ -196,7 +197,7 @@ class Extractor:
             Path('context.py'),
             context_python=context_python,
             sandbox_args=sandbox_args,
-            sandbox_proposal=self.db.metameta['proposal']
+            sandbox_proposal=self.db.metameta.get('proposal')
         )
         if error_info is not None:
             raise RuntimeError(f"Error loading context file:\n{error_info[0]}")
@@ -307,9 +308,10 @@ class RunExtractor(Extractor):
             for line in tf:
                 pth = line.decode().strip()
                 if pth and Path(pth).is_file():
-                    self.kafka_prd.send(FILE_SUBMIT_TOPIC, file_submit_msg(
-                        self.db.path.parent, self.proposal, self.run, pth
-                    ))
+                    self.kafka_prd.send(
+                        get_file_submit_topic(self._base_dir),
+                        file_submit_msg(self.db.path.parent, self.proposal, self.run, pth),
+                    )
 
     def extract_and_ingest(self):
         self._notify_running()

@@ -13,27 +13,17 @@ from threading import Thread
 from kafka import KafkaConsumer
 
 from ..context import RunData
-from ..definitions import DEFAULT_DAMNIT_PYTHON
-from ..api import find_proposal
+from ..site_config import (
+    get_default_damnit_python,
+    listener_auto_add_official_databases,
+    listener_kafka_conf,
+    official_damnit_dir_for_proposal,
+)
 from .db import DamnitDB, KeyValueMapping, db_path
 from .extraction_control import ExtractionRequest, ExtractionSubmitter
 from .service import notify_ready
 
-# For now, the migration & calibration events come via DESY's Kafka brokers,
-# but the DAMNIT updates go via XFEL's test instance.
-CONSUMER_ID = 'xfel-da-damnit-{}'
-KAFKA_CONF = {
-    'maxwell': {
-        'brokers': ['exflwgs06:9091'],
-        'topics': ["test.r2d2", "cal.offline-corrections"],
-        'events': ["migration_complete", "run_corrections_complete"],
-    },
-    'onc': {
-        'brokers': ['exflwgs06:9091'],
-        'topics': ['test.euxfel.hed.daq', 'test.euxfel.hed.cal'],
-        'events': ['daq_run_complete', 'online_correction_complete'],
-    }
-}
+CONSUMER_ID = 'damnit-listener-{}'
 READONLY_WAIT_REOPEN = 2  # Wait N seconds to reopen after read-only error
 
 SCHEMA = """
@@ -133,22 +123,26 @@ class EventProcessor:
         self.db = ListenerDB(listener_dir)
 
         hostname = gethostname()
-        if hostname.startswith('exflonc'):
-            # running on the online cluster
-            kafka_conf = KAFKA_CONF['onc']
-        else:
-            kafka_conf = KAFKA_CONF['maxwell']
+        profile_name, kafka_conf = listener_kafka_conf(listener_dir, hostname=hostname)
+        topics = list(kafka_conf.get("topics", []))
+        brokers = list(kafka_conf.get("brokers", []))
+        events = list(kafka_conf.get("events", []))
+        if not topics or not brokers or not events:
+            raise ValueError(
+                f"Kafka listener profile {profile_name!r} is incomplete in site config"
+            )
 
         group_id = CONSUMER_ID.format(str(listener_dir).replace("/", "_"))
         client_id = CONSUMER_ID.format(f"{hostname}-{os.getpid()}")
-        self.kafka_cns = KafkaConsumer(*kafka_conf['topics'],
-                                       bootstrap_servers=kafka_conf['brokers'],
+        self.kafka_cns = KafkaConsumer(*topics,
+                                       bootstrap_servers=brokers,
                                        group_id=group_id,
                                        client_id=client_id,
                                        consumer_timeout_ms=600_000,
                                        )
-        self.events = kafka_conf['events']
-        log.info("Started listener")
+        self.events = events
+        self.kafka_profile = profile_name
+        log.info("Started listener (Kafka profile: %s)", profile_name)
 
     def __enter__(self):
         return self
@@ -201,11 +195,14 @@ class EventProcessor:
 
         # If it's the first time we've seen this proposal and we're not in
         # static mode, add it to the database.
-        try:
-            official_path = find_proposal(proposal) / "usr/Shared/amore"
-        except FileNotFoundError:
-            log.warning(f"Could not find proposal directory for p{proposal}")
-            official_path = None
+        official_path = None
+        if listener_auto_add_official_databases(self._listener_dir):
+            try:
+                official_path = official_damnit_dir_for_proposal(
+                    proposal, base_dir=self._listener_dir
+                )
+            except FileNotFoundError:
+                log.warning(f"Could not find proposal directory for p{proposal}")
 
         if official_path and db_path(official_path).is_file() and not self.db.settings["static_mode"]:
             if official_path not in self.db.proposal_db_dirs(proposal):
@@ -223,7 +220,9 @@ class EventProcessor:
                     log.info(f"Added p%d r%d ({run_data.value} data) to database", proposal, run)
 
                     # Set the default to the stable DAMNIT module if not already set
-                    damnit_python = db.metameta.setdefault("damnit_python", DEFAULT_DAMNIT_PYTHON)
+                    damnit_python = db.metameta.setdefault(
+                        "damnit_python", get_default_damnit_python(path)
+                    )
                     submitter = ExtractionSubmitter(db.path.parent, db)
                     req = ExtractionRequest(run, proposal, run_data, sandbox_args, damnit_python)
 

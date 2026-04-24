@@ -25,7 +25,7 @@ from ..backend import initialize_proposal
 from ..backend.db import DamnitDB, MsgKind, ReducedData, db_path
 from ..backend.extraction_control import ExtractionSubmitter, process_log_path
 from ..backend.user_variables import UserEditableVariable
-from ..definitions import UPDATE_BROKERS
+from ..site_config import get_update_brokers, proposal_is_required
 from ..util import isinstance_no_import
 from .editor import ContextTestResult, Editor, SaveConflictDialog
 from .kafka import UpdateAgent
@@ -610,10 +610,11 @@ da-dev@xfel.eu"""
         assert self.db_id is not None
 
         try:
-            self.update_agent = UpdateAgent(self.db_id)
+            brokers = get_update_brokers(self.context_dir)
+            self.update_agent = UpdateAgent(self.db_id, self.context_dir)
         except NoBrokersAvailable:
             QtWidgets.QMessageBox.warning(self, "Broker connection failed",
-                                          f"Could not connect to any Kafka brokers at: {' '.join(UPDATE_BROKERS)}\n\n" +
+                                          f"Could not connect to any Kafka brokers at: {' '.join(brokers)}\n\n" +
                                           "DAMNIT can operate offline, but it will not receive any updates from new or reprocessed runs.")
             return
 
@@ -1213,7 +1214,7 @@ def prompt_setup_db(context_dir: Path, prop_no=None, parent=None):
         else:
             context_file_src = user_vars_src = None
 
-        if prop_no is None:
+        if prop_no is None and proposal_is_required(context_dir):
             prop_no, ok = QtWidgets.QInputDialog.getInt(
                 parent, "Select proposal", "Which proposal is this for?"
             )

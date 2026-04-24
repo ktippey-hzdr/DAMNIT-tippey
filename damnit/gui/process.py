@@ -6,11 +6,11 @@ from PyQt5 import QtWidgets
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QDialogButtonBox
 
-from extra_data.read_machinery import find_proposal
 from superqt import QSearchableListWidget
 
 from ..context import RunData
 from ..backend.extraction_control import ExtractionRequest
+from ..site_config import find_proposal_dir
 
 log = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ def fmt_run_ranges(run_nums: list[int]) -> str:
 
 def find_runs(runs: list[int], propnum: str) -> list[int]:
     try:
-        prop_dir = Path(find_proposal(f"p{int(propnum):06}"))
+        prop_dir = Path(find_proposal_dir(int(propnum)))
         raw_runs = {p.name for p in (prop_dir / 'raw').iterdir()}
     except:  # E.g. propnum is not numeric or permission denied
         return []

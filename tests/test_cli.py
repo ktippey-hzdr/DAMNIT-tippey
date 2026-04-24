@@ -6,6 +6,8 @@ from contextlib import contextmanager
 import pytest
 from testpath import MockCommand
 
+from damnit.backend.db import DamnitDB
+from damnit.backend import initialize_proposal
 from damnit.backend.listener import ListenerDB
 from damnit.cli import main, excepthook as ipython_excepthook
 
@@ -204,3 +206,31 @@ def test_cli_command_name(capsys, monkeypatch):
         captured = capsys.readouterr()
         assert "Warning: 'amore-proto' has been renamed to 'damnit'" in captured.err  # Shows deprecation
         assert 'usage:' in captured.out  # Help text is shown
+
+
+def test_site_config_commands(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+
+    main(["site-config", "init", "--profile", "hzdr"])
+    out = capsys.readouterr().out
+    assert "damnit-site.json" in out
+    assert (tmp_path / "damnit-site.json").is_file()
+    assert (tmp_path / ".damnit.env.example").is_file()
+
+    main(["site-config", "show"])
+    shown = capsys.readouterr().out
+    assert '"profile": "hzdr"' in shown
+
+
+def test_sample_data_command(tmp_path, monkeypatch):
+    db_dir = tmp_path / "db"
+    initialize_proposal(db_dir, 1234)
+    monkeypatch.chdir(tmp_path)
+
+    main(["sample-data", str(db_dir), "--runs", "2", "--start-run", "50"])
+
+    db = DamnitDB.from_dir(db_dir)
+    run_rows = db.conn.execute(
+        "SELECT run FROM run_info WHERE proposal=1234 ORDER BY run"
+    ).fetchall()
+    assert [row["run"] for row in run_rows] == [50, 51]

@@ -1,14 +1,30 @@
 import inspect
+import json
 import logging
 import sys
 import textwrap
 import traceback
-from argparse import ArgumentParser, SUPPRESS
+from argparse import ArgumentParser
 from pathlib import Path
 
 from termcolor import colored
 
-from extra_data.read_machinery import find_proposal
+from .site_config import (
+    find_proposal_dir,
+    load_site_config,
+    write_site_config_template,
+)
+
+
+def find_proposal(propno):
+    """Compatibility wrapper used by tests and old call sites."""
+    return find_proposal_dir(propno, base_dir=Path.cwd())
+
+
+def _default_db_subdir(base_dir: Path | None = None) -> Path:
+    cfg = load_site_config(base_dir or Path.cwd())
+    rel = cfg.get("lab", {}).get("damnit_directory_name", "usr/Shared/amore")
+    return Path(rel)
 
 
 def excepthook(exc_type, value, tb):
@@ -252,6 +268,63 @@ def main(argv=None):
         help="A new value for the given key"
     )
 
+    sample_data_ap = subparsers.add_parser(
+        "sample-data",
+        help="Generate synthetic runs for quick local testing",
+    )
+    sample_data_ap.add_argument(
+        "db_dir", type=Path, nargs="?", default=Path.cwd(),
+        help="DAMNIT database directory",
+    )
+    sample_data_ap.add_argument(
+        "--proposal", type=int,
+        help="Proposal number to use (defaults to database proposal)",
+    )
+    sample_data_ap.add_argument(
+        "--runs", type=int, default=5,
+        help="Number of synthetic runs to generate",
+    )
+    sample_data_ap.add_argument(
+        "--start-run", type=int, default=1,
+        help="First run number to generate",
+    )
+    sample_data_ap.add_argument(
+        "--seed", type=int, default=7,
+        help="Seed for deterministic synthetic data",
+    )
+
+    site_config_ap = subparsers.add_parser(
+        "site-config",
+        help="Show or create site-level DAMNIT configuration files",
+    )
+    site_config_subparsers = site_config_ap.add_subparsers(
+        dest="site_config_subcmd", required=True
+    )
+
+    site_config_show_ap = site_config_subparsers.add_parser(
+        "show", help="Print the effective site config as JSON"
+    )
+    site_config_show_ap.add_argument(
+        "directory", type=Path, nargs="?", default=Path.cwd(),
+        help="Directory to resolve site config from",
+    )
+
+    site_config_init_ap = site_config_subparsers.add_parser(
+        "init", help="Write a site config template and .env example"
+    )
+    site_config_init_ap.add_argument(
+        "--profile", choices=("hzdr", "xfel"), default="hzdr",
+        help="Template profile to write",
+    )
+    site_config_init_ap.add_argument(
+        "--force", action="store_true",
+        help="Overwrite existing template files",
+    )
+    site_config_init_ap.add_argument(
+        "directory", type=Path, nargs="?", default=Path.cwd(),
+        help="Directory where files should be created",
+    )
+
     migrate_ap = subparsers.add_parser(
         "migrate",
         help="Execute migrations to help upgrading. Do NOT execute a migration unless you know what you're doing."
@@ -283,8 +356,8 @@ def main(argv=None):
             if (path := Path(args.proposal_or_dir)).is_dir():
                 context_dir = path
             elif args.proposal_or_dir.isdigit():
-                proposal_name = f"p{int(args.proposal_or_dir):06d}"
-                context_dir = Path(find_proposal(proposal_name)) / "usr/Shared/amore"
+                proposal_root = Path(find_proposal(int(args.proposal_or_dir)))
+                context_dir = proposal_root / _default_db_subdir(Path.cwd())
             else:
                 sys.exit(f"{args.proposal_or_dir} is not a proposal number or DAMNIT database directory")
         else:
@@ -317,7 +390,8 @@ def main(argv=None):
                                # Convert `static_mode` to a bool
                                dict(static_mode=lambda x: bool(int(x))))
         elif args.listener_subcmd == "add":
-            official_dir = Path(find_proposal(f"p{args.proposal:06d}")) / "usr/Shared/amore"
+            proposal_root = Path(find_proposal(args.proposal))
+            official_dir = proposal_root / _default_db_subdir(Path.cwd())
 
             if args.db_dir is None:
                 db_dir = official_dir
@@ -390,6 +464,32 @@ def main(argv=None):
 
         db = DamnitDB()
         handle_config_args(args, db.metameta)
+
+    elif args.subcmd == "sample-data":
+        from .sample_data import generate_sample_data
+
+        proposal, runs = generate_sample_data(
+            args.db_dir,
+            runs=args.runs,
+            start_run=args.start_run,
+            proposal=args.proposal,
+            seed=args.seed,
+        )
+        print(
+            f"Generated {len(runs)} synthetic runs for p{proposal}: "
+            f"{runs[0]}-{runs[-1]}"
+        )
+
+    elif args.subcmd == "site-config":
+        if args.site_config_subcmd == "show":
+            cfg = load_site_config(args.directory)
+            print(json.dumps(cfg, indent=2, sort_keys=True))
+        elif args.site_config_subcmd == "init":
+            cfg_path, env_example_path = write_site_config_template(
+                args.directory, profile=args.profile, force=args.force
+            )
+            print(f"Wrote {cfg_path}")
+            print(f"Wrote {env_example_path}")
 
     elif args.subcmd == "migrate":
         from .backend.db import DamnitDB

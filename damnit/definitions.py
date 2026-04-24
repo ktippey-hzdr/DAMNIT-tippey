@@ -1,13 +1,19 @@
-import os
+"""Compatibility constants used across DAMNIT.
 
-# Kafka for sending updates around
-if "AMORE_BROKER" in os.environ:
-    UPDATE_BROKERS = [os.environ["AMORE_BROKER"]]
-else:
-    UPDATE_BROKERS = ['exflwgs06.desy.de:9091']
+Prefer the helpers in `damnit.site_config` for context-directory specific
+values, because these constants are evaluated once at import time.
+"""
 
-UPDATE_TOPIC = "test.damnit.db-{}"  # Fill in ID stored in database
-FILE_SUBMIT_TOPIC = "test.damnit.file_submissions"
+from .site_config import (
+    get_default_context_python,
+    get_default_damnit_python,
+    get_file_submit_topic,
+    get_update_brokers,
+    get_update_topic_template,
+)
 
-DEFAULT_CONTEXT_PYTHON = "/gpfs/exfel/sw/software/euxfel-environment-management/environments/202502/.pixi/envs/default/bin/python"
-DEFAULT_DAMNIT_PYTHON = "/gpfs/exfel/sw/software/xfel_anaconda3/amore-mid/.pixi/envs/default/bin/python"
+UPDATE_BROKERS = get_update_brokers()
+UPDATE_TOPIC = get_update_topic_template()
+FILE_SUBMIT_TOPIC = get_file_submit_topic()
+DEFAULT_CONTEXT_PYTHON = get_default_context_python()
+DEFAULT_DAMNIT_PYTHON = get_default_damnit_python()

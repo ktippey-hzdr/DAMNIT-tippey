@@ -16,12 +16,16 @@ from secrets import token_hex
 from threading import Thread
 from uuid import uuid4
 
-from extra_data.read_machinery import find_proposal
-
 from .db import DamnitDB
 from ..context import RunData
+from ..site_config import find_proposal_dir
 
 log = logging.getLogger(__name__)
+
+
+def find_proposal(propno):
+    """Compatibility wrapper used by tests and old call sites."""
+    return find_proposal_dir(propno, base_dir=Path.cwd())
 
 
 # Python innetgr wrapper after https://github.com/wcooley/netgroup-python/
@@ -146,7 +150,7 @@ class ExtractionSubmitter:
         self.context_dir = context_dir
         if db is None:
             db = DamnitDB.from_dir(context_dir)
-        self.proposal = db.metameta['proposal']
+        self.proposal = db.metameta.get('proposal')
         self._concurrent_jobs = db.metameta.get("concurrent_jobs", 15)
         self._slurm_time = db.metameta.get("slurm_time", "02:00:00")
         self._noncluster_cpus = db.metameta.get('noncluster_cpus', '4')
@@ -333,6 +337,12 @@ def reprocess(runs, proposal=None, match=(), mock=False, watch=False, direct=Fal
         if proposal is None:
             proposal = submitter.proposal
         rows = db.conn.execute("SELECT proposal, run FROM runs").fetchall() if runs == ['all'] else None
+
+    if proposal is None and runs != ['all']:
+        sys.exit(
+            "No proposal configured for this database. Use --proposal or set one with "
+            "`damnit proposal <number>`."
+        )
 
     if runs == ['all']:
         # Dictionary of proposal numbers to sets of available runs

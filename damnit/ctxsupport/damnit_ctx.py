@@ -7,11 +7,14 @@ than the DAMNIT code in general, to allow running context files in other Python
 environments.
 """
 import logging
+import json
+import os
 import re
 import sys
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 
 import h5py
 import numpy as np
@@ -23,6 +26,11 @@ __all__ = [
     "Cell",
     "Group",
     "GroupError",
+    "load_site_config",
+    "mongo_find",
+    "mongo_find_one",
+    "mongo_json_cell",
+    "mongo_series_cell",
     "RunData",
     "Skip",
     "Variable"
@@ -32,6 +40,12 @@ log = logging.getLogger(__name__)
 
 
 THUMBNAIL_SIZE = 300 # px
+SITE_CONFIG_CANDIDATES = (
+    "damnit-site.json",
+    ".damnit-site.json",
+    ".damnit/site.json",
+)
+ENV_VAR_PATTERN = re.compile(r"\$(?:\{([^}]+)\}|([A-Za-z_][A-Za-z0-9_]*))")
 
 
 def isinstance_no_import(obj, mod: str, cls: str):
@@ -356,6 +370,231 @@ def _normalize_tags(tags) -> tuple[str]:
     if isinstance(tags, str):
         return (tags,)
     return tuple(tags)
+
+
+def _merge_dicts(base: dict, override: dict) -> dict:
+    merged = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _merge_dicts(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def _expand_env(obj, env: dict[str, str]):
+    if isinstance(obj, dict):
+        return {k: _expand_env(v, env) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_expand_env(v, env) for v in obj]
+    if isinstance(obj, str):
+        return ENV_VAR_PATTERN.sub(
+            lambda m: env.get(m.group(1) or m.group(2), m.group(0)), obj
+        )
+    return obj
+
+
+def _read_env_file(path: Path | None) -> dict[str, str]:
+    if path is None or not path.is_file():
+        return {}
+
+    env = {}
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export ") :].strip()
+        if "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if value and value[0] == value[-1] and value[0] in ("'", '"'):
+            value = value[1:-1]
+        env[key] = value
+    return env
+
+
+def load_site_config(base_dir: str | Path | None = None) -> dict:
+    """Load DAMNIT site config for context helpers.
+
+    This supports the same file names as the backend and applies environment
+    variable expansion using both `.env` values and process environment values.
+    """
+    base = Path(base_dir or Path.cwd()).absolute()
+    cfg = {
+        "site_env_file": ".damnit.env",
+        "data_sources": {"mongodb": {}},
+    }
+
+    cfg_path = None
+    if explicit := os.environ.get("DAMNIT_SITE_CONFIG"):
+        cfg_path = Path(explicit).expanduser()
+    else:
+        for folder in (base, *base.parents):
+            for name in SITE_CONFIG_CANDIDATES:
+                candidate = folder / name
+                if candidate.is_file():
+                    cfg_path = candidate
+                    break
+            if cfg_path is not None:
+                break
+
+    if cfg_path is not None and cfg_path.is_file():
+        loaded = json.loads(cfg_path.read_text())
+        if not isinstance(loaded, dict):
+            raise ValueError(f"Expected object at top of {cfg_path}")
+        cfg = _merge_dicts(cfg, loaded)
+
+    if explicit_env := os.environ.get("DAMNIT_SITE_ENV"):
+        env_path = Path(explicit_env).expanduser()
+    else:
+        env_path = Path(cfg.get("site_env_file", ".damnit.env"))
+        if not env_path.is_absolute():
+            env_path = (cfg_path.parent if cfg_path is not None else base) / env_path
+
+    env = _read_env_file(env_path)
+    env.update(os.environ)
+    return _expand_env(cfg, env)
+
+
+def _json_safe(obj):
+    if isinstance(obj, dict):
+        return {str(k): _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_json_safe(v) for v in obj]
+    if isinstance(obj, tuple):
+        return tuple(_json_safe(v) for v in obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, np.generic):
+        return obj.item()
+    if isinstance(obj, (str, int, float, bool, type(None))):
+        return obj
+    return str(obj)
+
+
+def _lookup_nested(doc: dict, path: str, default=None):
+    current = doc
+    for part in path.split("."):
+        if not isinstance(current, dict) or part not in current:
+            return default
+        current = current[part]
+    return current
+
+
+def mongo_find(
+    source: str,
+    query: dict | None = None,
+    *,
+    projection: dict | None = None,
+    sort=None,
+    limit: int = 0,
+    collection: str | None = None,
+    config: dict | None = None,
+) -> list[dict]:
+    """Fetch documents from a configured MongoDB source."""
+    cfg = config if config is not None else load_site_config()
+    source_cfg = cfg.get("data_sources", {}).get("mongodb", {}).get(source)
+    if source_cfg is None:
+        raise KeyError(f"MongoDB source {source!r} not found in site config")
+
+    uri = source_cfg.get("uri", "")
+    if (not uri) and source_cfg.get("uri_env"):
+        uri = os.environ.get(source_cfg["uri_env"], "")
+    if not uri:
+        raise ValueError(f"No MongoDB URI configured for source {source!r}")
+
+    db_name = source_cfg.get("database")
+    coll_name = collection or source_cfg.get("collection")
+    if not db_name or not coll_name:
+        raise ValueError(
+            f"MongoDB source {source!r} must define 'database' and 'collection'"
+        )
+
+    try:
+        from pymongo import MongoClient
+    except ImportError as exc:
+        raise ModuleNotFoundError(
+            "pymongo is required to query MongoDB from context files"
+        ) from exc
+
+    docs = []
+    client = MongoClient(uri)
+    try:
+        cursor = client[db_name][coll_name].find(query or {}, projection)
+        if sort is not None:
+            cursor = cursor.sort(sort)
+        if limit:
+            cursor = cursor.limit(limit)
+        docs = [_json_safe(doc) for doc in cursor]
+    finally:
+        client.close()
+
+    return docs
+
+
+def mongo_find_one(
+    source: str,
+    query: dict | None = None,
+    *,
+    projection: dict | None = None,
+    sort=None,
+    collection: str | None = None,
+    config: dict | None = None,
+) -> dict | None:
+    """Fetch a single MongoDB document from a configured source."""
+    docs = mongo_find(
+        source,
+        query=query,
+        projection=projection,
+        sort=sort,
+        limit=1,
+        collection=collection,
+        config=config,
+    )
+    return docs[0] if docs else None
+
+
+def mongo_series_cell(
+    records: Sequence[dict],
+    field: str,
+    *,
+    summary: str = "nanmean",
+    missing=np.nan,
+) -> Cell:
+    """Build a Cell from a numeric field in MongoDB records.
+
+    The resulting 1D array gets downsampled in the table and plotted on
+    double-click.
+    """
+    values = []
+    for record in records:
+        value = _lookup_nested(record, field, missing)
+        try:
+            values.append(float(value))
+        except (TypeError, ValueError):
+            values.append(float(missing))
+    return Cell(np.asarray(values, dtype=np.float64), summary=summary)
+
+
+def mongo_json_cell(
+    record: dict | None,
+    *,
+    summary_field: str | None = None,
+    fallback_summary: str = "<mongo document>",
+) -> Cell:
+    """Return a Cell that stores a MongoDB document as formatted JSON."""
+    safe_record = _json_safe(record or {})
+    summary_value = fallback_summary
+    if summary_field:
+        summary_value = _lookup_nested(safe_record, summary_field, fallback_summary)
+    return Cell(
+        json.dumps(safe_record, indent=2, sort_keys=True),
+        summary_value=str(summary_value),
+    )
 
 
 def _inherit_group_config(cls):

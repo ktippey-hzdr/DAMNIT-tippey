@@ -14,7 +14,7 @@ from kafka import KafkaConsumer, KafkaProducer
 from xarray.backends import H5NetCDFStore
 
 from ..context import DataType
-from ..definitions import FILE_SUBMIT_TOPIC, UPDATE_BROKERS
+from ..site_config import get_file_submit_topic, get_update_brokers
 from .db import DamnitDB, MsgKind, msg_dict
 from .extract_data import load_reduced_data, add_to_db
 from .service import notify_ready
@@ -72,15 +72,18 @@ def combine(src: Path, dst: Path):
 
 
 class FileSubmissionProcessor:
-    def __init__(self):
+    def __init__(self, base_dir: Path | None = None):
+        self._base_dir = (base_dir or Path.cwd()).absolute()
+        self.file_submit_topic = get_file_submit_topic(self._base_dir)
+        brokers = get_update_brokers(self._base_dir)
         self.consumer = KafkaConsumer(
-            FILE_SUBMIT_TOPIC,
-            bootstrap_servers=UPDATE_BROKERS,
+            self.file_submit_topic,
+            bootstrap_servers=brokers,
             group_id='xfel-da-damnit-combiner',
             consumer_timeout_ms=600_000,
         )
         self.producer = KafkaProducer(
-            bootstrap_servers=UPDATE_BROKERS,
+            bootstrap_servers=brokers,
             value_serializer=lambda d: json.dumps(d).encode('utf-8')
         )
 

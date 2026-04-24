@@ -2,10 +2,10 @@ from pathlib import Path
 from socket import gethostname
 from typing import Optional, Tuple
 
-from extra_data.read_machinery import find_proposal
 from PyQt5.QtCore import QObject, QThread, pyqtSignal
 from PyQt5.QtWidgets import QDialog, QDialogButtonBox, QFileDialog
 
+from ..site_config import find_proposal_dir
 from .open_dialog_ui import Ui_Dialog
 
 
@@ -15,7 +15,7 @@ class ProposalFinder(QObject):
     def find_proposal(self, propnum: str):
         if propnum.isdecimal() and len(propnum) >= 4:
             try:
-                dir = find_proposal(f"p{int(propnum):06}")
+                dir = find_proposal_dir(int(propnum))
             except:
                 dir = ''
         else:

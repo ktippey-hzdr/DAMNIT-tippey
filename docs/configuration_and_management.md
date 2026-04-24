@@ -530,6 +530,30 @@ The environment *must* have these dependencies installed for DAMNIT to work:
 If your variables return [plotly](https://plotly.com/python/) plots, the
 environment must also have the `kaleido` package.
 
+## Site configuration (multi-lab deployments)
+
+DAMNIT can now load site-specific settings from `damnit-site.json`, including:
+
+- Proposal optionality (`lab.proposal_required`)
+- Kafka listener/update brokers and topics
+- MongoDB connection settings for context helpers
+- Auth provider metadata (`auth.provider`, LDAP/Helmholtz fields)
+
+Create a starter config:
+
+```bash
+# HZDR-oriented template
+damnit site-config init --profile hzdr
+```
+
+Show effective config as parsed by DAMNIT:
+
+```bash
+damnit site-config show
+```
+
+For details and examples, see [Multi-lab configuration](multi-lab-configuration.md).
+
 ## Starting from scratch
 Sometimes it's useful to delete all of the data so far and start from
 scratch. As long as you have the context file this is safe, with the caveat that

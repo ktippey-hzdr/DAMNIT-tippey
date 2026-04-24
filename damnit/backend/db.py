@@ -17,7 +17,11 @@ from typing import Any, Optional
 
 import numpy as np
 
-from ..definitions import UPDATE_TOPIC, DEFAULT_CONTEXT_PYTHON
+from ..site_config import (
+    format_update_topic,
+    get_default_context_python,
+    proposal_is_required,
+)
 from .db_migrations import apply_migrations, latest_version
 from .user_variables import UserEditableVariable
 
@@ -148,7 +152,7 @@ class DamnitDB:
 
     @property
     def kafka_topic(self):
-        return UPDATE_TOPIC.format(self._db_id)
+        return format_update_topic(self._db_id, self._path.parent)
 
     @property
     def path(self):
@@ -581,17 +585,21 @@ def initialize_proposal(root_path, proposal=None, context_file_src=None, user_va
 
     # If the database doesn't exist, create it
     if new_db := not db_path(root_path).is_file():
-        if proposal is None:
-            raise ValueError("Must pass a proposal number to `initialize_proposal()` if the database doesn't exist yet.")
+        if proposal is None and proposal_is_required(root_path):
+            raise ValueError(
+                "Must pass a proposal number to `initialize_proposal()` if the "
+                "database doesn't exist yet."
+            )
 
         # Initialize database
         db = DamnitDB.from_dir(root_path)
-        db.metameta["proposal"] = proposal
-        db.metameta["context_python"] = DEFAULT_CONTEXT_PYTHON
+        if proposal is not None:
+            db.metameta["proposal"] = proposal
+        db.metameta["context_python"] = get_default_context_python(root_path)
     else:
         # Otherwise, load the proposal number
         db = DamnitDB.from_dir(root_path)
-        proposal = db.metameta["proposal"]
+        proposal = db.metameta.get("proposal")
 
     context_path = root_path / "context.py"
     # Copy initial context file if necessary

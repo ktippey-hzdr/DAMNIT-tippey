@@ -1,13 +1,11 @@
-import os
-import os.path as osp
 from contextlib import contextmanager
 from enum import Enum
-from glob import iglob
 from pathlib import Path
 
 import h5py
 import numpy as np
 
+from .site_config import find_proposal_dir, official_damnit_dir_for_proposal
 from .backend.db import BlobTypes, DamnitDB, blob2complex, blob2numpy
 from .util import isinstance_no_import
 
@@ -23,12 +21,7 @@ class DataType(Enum):
 
 # Also copied, this time from extra_data.read_machinery
 def find_proposal(propno):
-    root_dir = os.environ.get('XFEL_DATA_ROOT', '/gpfs/exfel/exp')
-    dir_name = f"p{propno:06}"
-    for d in iglob(osp.join(root_dir, '*/*/{}'.format(dir_name))):
-        return Path(d)
-
-    raise FileNotFoundError("Couldn't find proposal dir for {!r}".format(propno))
+    return find_proposal_dir(propno)
 
 
 class VariableData:
@@ -562,7 +555,7 @@ def submit(proposal: int, run: int, variables, *, provenance,
     errors = errors or {}
 
     if damnit_dir is None:
-        damnit_dir = find_proposal(proposal) / "usr/Shared/amore"
+        damnit_dir = official_damnit_dir_for_proposal(proposal)
     else:
         damnit_dir = Path(damnit_dir)
 
