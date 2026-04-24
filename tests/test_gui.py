@@ -25,6 +25,7 @@ from damnit.backend.extract_data import add_to_db
 from damnit.ctxsupport.ctxrunner import ContextFile
 from damnit.gui.editor import ContextTestResult
 from damnit.gui.main_window import AddUserVariableDialog, MainWindow
+from damnit.gui.new_context_dialog import NewContextFileDialog
 from damnit.gui.open_dialog import OpenDBDialog
 from damnit.gui.plot import HistogramPlotWindow, ScatterPlotWindow
 from damnit.gui.standalone_comments import TimeComment
@@ -934,6 +935,36 @@ def test_open_dialog(mock_db, qtbot):
 
     assert dlg.get_chosen_dir() == db_dir
     assert dlg.get_proposal_num() is None
+
+
+def test_open_dialog_hides_proposal_for_non_proposal_sites(monkeypatch, qtbot):
+    monkeypatch.setattr("damnit.gui.open_dialog.proposal_is_required", lambda _: False)
+    monkeypatch.setattr(
+        "damnit.gui.open_dialog.load_site_config",
+        lambda: {"lab": {"name": "HZDR"}},
+    )
+
+    dlg = OpenDBDialog()
+    qtbot.addWidget(dlg)
+
+    assert dlg.ui.proposal_rb.isHidden()
+    assert dlg.ui.proposal_edit.isHidden()
+    assert dlg.ui.folder_rb.isChecked()
+    assert dlg.ui.folder_rb.text() == "Open HZDR DAMNIT folder:"
+
+
+def test_new_context_dialog_hides_proposal_for_non_proposal_sites(monkeypatch, qtbot, tmp_path):
+    monkeypatch.setattr("damnit.gui.new_context_dialog.proposal_is_required", lambda _: False)
+
+    target_path = tmp_path / "damnit-db"
+    target_path.mkdir()
+    dlg = NewContextFileDialog(target_path)
+    qtbot.addWidget(dlg)
+
+    assert dlg.ui.proposal_rb.isHidden()
+    assert dlg.ui.proposal_edit.isHidden()
+    assert dlg.ui.user_vars_cb.isHidden()
+
 
 def test_zulip(mock_db_with_data, monkeypatch, qtbot):
     db_dir, db = mock_db_with_data

@@ -5,7 +5,7 @@ from typing import Optional
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QDialog, QFileDialog, QListWidgetItem, QMessageBox
 
-from ..site_config import find_proposal_dir
+from ..site_config import find_proposal_dir, proposal_is_required
 from .new_context_dialog_ui import Ui_Dialog
 
 DAMNIT_PKG = Path(__file__).parent.parent
@@ -31,6 +31,8 @@ class NewContextFileDialog(QDialog):
         super().__init__(parent)
         self.ui = Ui_Dialog()
         self.ui.setupUi(self)
+        self._proposal_required = proposal_is_required(target_path)
+        self._configure_for_site_profile()
 
         group = find_instrument(target_path)
         if group in ALL_GROUPS:
@@ -54,6 +56,14 @@ class NewContextFileDialog(QDialog):
 
         self.ui.template_other_inst_cb.toggled.connect(self.populate_template_list)
         self.ui.browse_button.clicked.connect(self.browse)
+
+    def _configure_for_site_profile(self):
+        if self._proposal_required:
+            return
+
+        self.ui.proposal_rb.hide()
+        self.ui.proposal_edit.hide()
+        self.ui.user_vars_cb.hide()
 
     def populate_template_list(self, all_insts=False):
         self.ui.template_list.clear()
