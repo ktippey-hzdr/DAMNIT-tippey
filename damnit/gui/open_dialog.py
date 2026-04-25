@@ -72,6 +72,7 @@ class OpenDBDialog(QDialog):
         self.proposal_finder_thread.finished.connect(self.proposal_finder_thread.deleteLater)
 
     def _configure_for_site_profile(self):
+        """Adapt the startup choices to proposal or folder-based deployments."""
         if self._proposal_required:
             return
 
@@ -83,7 +84,8 @@ class OpenDBDialog(QDialog):
         self.ui.proposal_rb.hide()
         self.ui.proposal_edit.hide()
         if lab_name:
-            self.ui.folder_rb.setText(f"Open {lab_name} DAMNIT folder:")
+            self.ui.label.setText(f"Select an existing {lab_name} DAMNIT folder:")
+            self.ui.folder_rb.setText(f"{lab_name} DAMNIT folder:")
 
     def run_get_result(self) -> Tuple[Optional[Path], Optional[int]]:
         self.proposal_finder_thread.start()

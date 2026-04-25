@@ -21,11 +21,10 @@ from copy import copy
 from datetime import timezone
 from graphlib import CycleError, TopologicalSorter
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
-import extra_data
-import extra_proposal
 import h5py
 import numpy as np
 
@@ -39,6 +38,30 @@ from damnit_writing import save_fragment
 log = logging.getLogger("ctxrunner")
 
 THUMBNAIL_SIZE = 300 # px
+
+
+def _missing_optional_dependency(package_name, import_error):
+    """Return a function that reports an optional XFEL dependency when used."""
+    def raise_import_error(*args, **kwargs):
+        raise ModuleNotFoundError(
+            f"{package_name} is required for this XFEL-specific context feature"
+        ) from import_error
+    return raise_import_error
+
+
+try:
+    import extra_data
+except ModuleNotFoundError as exc:
+    extra_data = SimpleNamespace(
+        open_run=_missing_optional_dependency("extra_data", exc)
+    )
+
+try:
+    import extra_proposal
+except ModuleNotFoundError as exc:
+    extra_proposal = SimpleNamespace(
+        Proposal=_missing_optional_dependency("extra_proposal", exc)
+    )
 
 
 def _group_name(group):

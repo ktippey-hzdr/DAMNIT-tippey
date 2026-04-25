@@ -12,6 +12,7 @@ import json
 import os
 import re
 import socket
+import sys
 from copy import deepcopy
 from glob import glob
 from pathlib import Path
@@ -366,24 +367,30 @@ def get_file_submit_topic(base_dir: Path | None = None) -> str:
 
 def get_default_context_python(base_dir: Path | None = None) -> str:
     cfg = load_site_config(base_dir)
-    return str(
+    context_python = str(
         _get_nested(
             cfg,
             ["runtime", "default_context_python"],
             DEFAULT_CONTEXT_PYTHON,
         )
     )
+    if context_python.startswith("$"):
+        return sys.executable
+    return context_python
 
 
 def get_default_damnit_python(base_dir: Path | None = None) -> str:
     cfg = load_site_config(base_dir)
-    return str(
+    damnit_python = str(
         _get_nested(
             cfg,
             ["runtime", "default_damnit_python"],
             DEFAULT_DAMNIT_PYTHON,
         )
     )
+    if damnit_python.startswith("$"):
+        return sys.executable
+    return damnit_python
 
 
 def proposal_is_required(base_dir: Path | None = None) -> bool:

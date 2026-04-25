@@ -94,6 +94,16 @@ def blob2numpy(data: bytes) -> np.ndarray:
 def db_path(root_path: Path):
     return root_path / DB_NAME
 
+
+def _chmod_if_owned(path: Path, mode: int):
+    """Apply Unix permissions only when ownership checks are available."""
+    getuid = getattr(os, "getuid", None)
+    if getuid is None:
+        return
+    if path.stat().st_uid == getuid():
+        os.chmod(path, mode)
+
+
 class DamnitDB:
     def __init__(self, path=DB_NAME, allow_old=False):
         self._path = path.absolute()
@@ -102,8 +112,7 @@ class DamnitDB:
         log.debug("Opening database at %s", path)
         self.conn = sqlite3.connect(path, timeout=30)
         # Ensure the database is writable by everyone
-        if os.stat(path).st_uid == os.getuid():
-            os.chmod(path, 0o666)
+        _chmod_if_owned(path, 0o666)
         # Enable foreign key enforcement for this connection
         self.conn.execute("PRAGMA foreign_keys = ON;") 
 
@@ -580,8 +589,7 @@ def msg_dict(kind: MsgKind, data: dict):
 def initialize_proposal(root_path, proposal=None, context_file_src=None, user_vars_src=None):
     # Ensure the directory exists
     root_path.mkdir(parents=True, exist_ok=True)
-    if root_path.stat().st_uid == os.getuid():
-        os.chmod(root_path, 0o777)
+    _chmod_if_owned(root_path, 0o777)
 
     # If the database doesn't exist, create it
     if new_db := not db_path(root_path).is_file():

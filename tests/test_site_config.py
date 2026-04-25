@@ -1,10 +1,12 @@
 import json
+import sys
 from pathlib import Path
 
 from damnit.backend.db import DamnitDB, initialize_proposal
 from damnit.site_config import (
     find_proposal_dir,
     format_update_topic,
+    get_default_context_python,
     get_update_brokers,
     listener_kafka_conf,
     load_site_config,
@@ -101,3 +103,24 @@ def test_listener_profile_resolution_from_site_config(tmp_path):
     assert conf["brokers"] == ["hzdr-kafka:9092"]
     assert conf["topics"] == ["hzdr.topic"]
     assert conf["events"] == ["hzdr_done"]
+
+
+def test_unresolved_runtime_python_falls_back_to_current_interpreter(tmp_path):
+    (tmp_path / "damnit-site.json").write_text(
+        json.dumps({"runtime": {"default_context_python": "$DAMNIT_CONTEXT_PYTHON"}})
+    )
+
+    assert get_default_context_python(tmp_path) == sys.executable
+
+
+def test_hzdr_starter_site_is_folder_based():
+    starter_dir = Path(__file__).parents[1] / "starter-sites" / "hzdr-damnit-site"
+
+    cfg = load_site_config(starter_dir)
+
+    assert cfg["profile"] == "hzdr"
+    assert cfg["lab"]["name"] == "HZDR"
+    assert cfg["lab"]["proposal_required"] is False
+    assert cfg["lab"]["damnit_directory_name"] == "."
+    assert cfg["data_sources"]["mongodb"]["labfrog"]["database"] == "shotsheet"
+    assert cfg["data_sources"]["mongodb"]["labfrog"]["collection"] == "shots"

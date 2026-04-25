@@ -7,7 +7,12 @@ import traceback
 from argparse import ArgumentParser
 from pathlib import Path
 
-from termcolor import colored
+try:
+    from termcolor import colored
+except ModuleNotFoundError:
+    def colored(text, color=None, **kwargs):
+        """Return uncoloured CLI text when termcolor is unavailable."""
+        return str(text)
 
 from .site_config import (
     find_proposal_dir,

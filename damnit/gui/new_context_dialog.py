@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Optional
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QDialog, QFileDialog, QListWidgetItem, QMessageBox
+from PyQt5.QtWidgets import QDialog, QFileDialog, QLabel, QListWidgetItem, QMessageBox
 
 from ..site_config import find_proposal_dir, proposal_is_required
 from .new_context_dialog_ui import Ui_Dialog
@@ -17,6 +17,18 @@ INST_TO_SASE = {
 }
 
 ALL_GROUPS = set(INST_TO_SASE) | set(INST_TO_SASE.values())
+
+TEMPLATE_DESCRIPTIONS = {
+    "HZDR_labfrog": (
+        "HZDR starter context for LabFrog/ShotSheet MongoDB metadata. "
+        "Includes examples for counts, numeric shot series, JSON records, "
+        "and planned HZDR ingest modes."
+    ),
+    "HZDR_preview_examples": (
+        "HZDR examples for returning table thumbnails with full data or plots "
+        "available when users double-click a DAMNIT table cell."
+    ),
+}
 
 def find_instrument(path: Path) -> str:
     if path.is_relative_to('/gpfs/exfel/exp'):
@@ -32,6 +44,7 @@ class NewContextFileDialog(QDialog):
         self.ui = Ui_Dialog()
         self.ui.setupUi(self)
         self._proposal_required = proposal_is_required(target_path)
+        self._template_hint = self._make_template_hint()
         self._configure_for_site_profile()
 
         group = find_instrument(target_path)
@@ -55,17 +68,30 @@ class NewContextFileDialog(QDialog):
         self.populate_template_list()
 
         self.ui.template_other_inst_cb.toggled.connect(self.populate_template_list)
+        self.ui.template_list.currentItemChanged.connect(self._update_template_hint)
         self.ui.browse_button.clicked.connect(self.browse)
 
+    def _make_template_hint(self) -> QLabel:
+        """Add compact guidance for the currently selected template."""
+        label = QLabel(self)
+        label.setWordWrap(True)
+        label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.ui.verticalLayout_2.addWidget(label)
+        return label
+
     def _configure_for_site_profile(self):
+        """Hide proposal-only choices when the active site does not use proposals."""
         if self._proposal_required:
             return
 
+        self.ui.label.setText("Create a new HZDR DAMNIT context file...")
         self.ui.proposal_rb.hide()
         self.ui.proposal_edit.hide()
         self.ui.user_vars_cb.hide()
+        self.ui.template_other_inst_cb.setText("Show templates for other sites")
 
     def populate_template_list(self, all_insts=False):
+        """Populate the template list, keeping HZDR templates visible everywhere."""
         self.ui.template_list.clear()
 
         for group, path in self.all_templates:
@@ -74,9 +100,26 @@ class NewContextFileDialog(QDialog):
 
             item = QListWidgetItem(path.stem, parent=self.ui.template_list)
             item.setData(Qt.ItemDataRole.UserRole, str(path))
+            if path.stem.startswith("HZDR_"):
+                item.setToolTip(TEMPLATE_DESCRIPTIONS.get(path.stem, "HZDR context template"))
 
         if self.ui.template_list.count() > 0:
             self.ui.template_list.setCurrentRow(0)
+        self._update_template_hint()
+
+    def _update_template_hint(self, current=None, previous=None):
+        """Show short template guidance without forcing users to inspect files."""
+        item = current or self.ui.template_list.currentItem()
+        if item is None:
+            self._template_hint.clear()
+            return
+
+        template_path = Path(item.data(Qt.ItemDataRole.UserRole))
+        description = TEMPLATE_DESCRIPTIONS.get(
+            template_path.stem,
+            "Use this as a starting context.py file and edit it for your data.",
+        )
+        self._template_hint.setText(description)
 
     def browse(self):
         path, _ = QFileDialog.getOpenFileName(

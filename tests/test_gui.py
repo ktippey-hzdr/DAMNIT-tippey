@@ -907,7 +907,9 @@ def test_table_and_plotting(mock_db_with_data, mock_ctx, mock_run, monkeypatch, 
         assert len(xr_plot_window._axis.get_legend().get_texts()) == 3  # 3 rows in our test data
 
 
-def test_open_dialog(mock_db, qtbot):
+def test_open_dialog(mock_db, monkeypatch, qtbot):
+    monkeypatch.setattr("damnit.gui.open_dialog.proposal_is_required", lambda _: True)
+
     db_dir, db = mock_db
     dlg = OpenDBDialog()
     qtbot.addWidget(dlg)
@@ -950,7 +952,8 @@ def test_open_dialog_hides_proposal_for_non_proposal_sites(monkeypatch, qtbot):
     assert dlg.ui.proposal_rb.isHidden()
     assert dlg.ui.proposal_edit.isHidden()
     assert dlg.ui.folder_rb.isChecked()
-    assert dlg.ui.folder_rb.text() == "Open HZDR DAMNIT folder:"
+    assert dlg.ui.label.text() == "Select an existing HZDR DAMNIT folder:"
+    assert dlg.ui.folder_rb.text() == "HZDR DAMNIT folder:"
 
 
 def test_open_dialog_prefers_home_site_config_when_cwd_has_none(monkeypatch, qtbot, tmp_path):
@@ -974,7 +977,23 @@ def test_open_dialog_prefers_home_site_config_when_cwd_has_none(monkeypatch, qtb
     assert dlg.ui.proposal_rb.isHidden()
     assert dlg.ui.proposal_edit.isHidden()
     assert dlg.ui.folder_rb.isChecked()
-    assert dlg.ui.folder_rb.text() == "Open HZDR DAMNIT folder:"
+    assert dlg.ui.label.text() == "Select an existing HZDR DAMNIT folder:"
+    assert dlg.ui.folder_rb.text() == "HZDR DAMNIT folder:"
+
+
+def test_open_dialog_uses_cwd_hzdr_site_config(monkeypatch, qtbot, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "damnit-site.json").write_text(
+        '{"profile": "hzdr", "lab": {"name": "HZDR", "proposal_required": false}}'
+    )
+
+    dlg = OpenDBDialog()
+    qtbot.addWidget(dlg)
+
+    assert dlg.ui.proposal_rb.isHidden()
+    assert dlg.ui.proposal_edit.isHidden()
+    assert dlg.ui.folder_rb.isChecked()
+    assert dlg.ui.label.text() == "Select an existing HZDR DAMNIT folder:"
 
 
 def test_new_context_dialog_hides_proposal_for_non_proposal_sites(monkeypatch, qtbot, tmp_path):
@@ -988,6 +1007,28 @@ def test_new_context_dialog_hides_proposal_for_non_proposal_sites(monkeypatch, q
     assert dlg.ui.proposal_rb.isHidden()
     assert dlg.ui.proposal_edit.isHidden()
     assert dlg.ui.user_vars_cb.isHidden()
+    assert dlg.ui.label.text() == "Create a new HZDR DAMNIT context file..."
+    assert dlg.ui.template_other_inst_cb.text() == "Show templates for other sites"
+
+
+def test_new_context_dialog_shows_hzdr_template_guidance(monkeypatch, qtbot, tmp_path):
+    monkeypatch.setattr("damnit.gui.new_context_dialog.proposal_is_required", lambda _: False)
+
+    target_path = tmp_path / "damnit-db"
+    target_path.mkdir()
+    dlg = NewContextFileDialog(target_path)
+    qtbot.addWidget(dlg)
+
+    template_names = [
+        dlg.ui.template_list.item(row).text()
+        for row in range(dlg.ui.template_list.count())
+    ]
+    assert "HZDR_labfrog" in template_names
+    assert "HZDR_preview_examples" in template_names
+
+    preview_row = template_names.index("HZDR_preview_examples")
+    dlg.ui.template_list.setCurrentRow(preview_row)
+    assert "double-click" in dlg._template_hint.text()
 
 
 def test_zulip(mock_db_with_data, monkeypatch, qtbot):

@@ -1,0 +1,87 @@
+{
+  "auth": {
+    "helmholtz": {
+      "client_id": "$DAMNIT_HELMHOLTZ_CLIENT_ID",
+      "issuer_url": "$DAMNIT_HELMHOLTZ_ISSUER",
+      "scopes": "openid profile email"
+    },
+    "ldap": {
+      "base_dn": "$DAMNIT_LDAP_BASE_DN",
+      "server": "$DAMNIT_LDAP_SERVER",
+      "user_attribute": "uid"
+    },
+    "provider": "helmholtz"
+  },
+  "data_sources": {
+    "mongodb": {
+      "labfrog": {
+        "collection": "shots",
+        "database": "shotsheet",
+        "uri": "$DAMNIT_MONGODB_LABFROG_URI"
+      }
+    },
+    "planned_ingest": {
+      "bigdata": {
+        "enabled": false,
+        "endpoint": "$DAMNIT_HZDR_BIGDATA_ENDPOINT",
+        "token_env": "DAMNIT_HZDR_BIGDATA_TOKEN"
+      },
+      "hdf5": {
+        "enabled": false,
+        "watch_dir": "$DAMNIT_HZDR_HDF5_WATCH_DIR"
+      },
+      "kafka": {
+        "enabled": true,
+        "profile": "hzdr",
+        "topic": "$DAMNIT_HZDR_KAFKA_TOPIC"
+      }
+    }
+  },
+  "kafka": {
+    "file_submit_topic": "damnit.file_submissions",
+    "hostname_profiles": [
+      {
+        "pattern": "*",
+        "profile": "hzdr"
+      }
+    ],
+    "listener_profiles": {
+      "hzdr": {
+        "brokers": [
+          "$DAMNIT_HZDR_KAFKA_BROKER"
+        ],
+        "events": [
+          "hzdr_run_complete"
+        ],
+        "topics": [
+          "$DAMNIT_HZDR_KAFKA_TOPIC"
+        ]
+      }
+    },
+    "update_brokers": [
+      "$DAMNIT_HZDR_UPDATE_BROKER"
+    ],
+    "update_topic_template": "damnit.db.{db_id}"
+  },
+  "lab": {
+    "damnit_directory_name": "usr/Shared/amore",
+    "data_root_default": "",
+    "data_root_env": "DAMNIT_HZDR_DATA_ROOT",
+    "data_roots": [
+      "$DAMNIT_HZDR_DATA_ROOT"
+    ],
+    "name": "HZDR",
+    "proposal_glob": "{proposal}",
+    "proposal_required": false
+  },
+  "listener": {
+    "auto_add_official_databases": false,
+    "default_profile": "hzdr"
+  },
+  "profile": "hzdr",
+  "runtime": {
+    "default_context_python": "$DAMNIT_CONTEXT_PYTHON",
+    "default_damnit_python": "$DAMNIT_DAMNIT_PYTHON"
+  },
+  "site_env_file": ".damnit.env"
+}

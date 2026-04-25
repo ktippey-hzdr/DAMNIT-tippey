@@ -22,6 +22,7 @@ dependencies = [
     "orjson",  # used in plotly for faster json serialization
     "pandas >=2.1.0",
     "plotly",
+    "termcolor",  # used by the top-level damnit CLI before extras are loaded
     "xarray"
 ]
 
@@ -34,22 +35,25 @@ backend = [
     "kaleido",  # used in plotly to convert figures to images
     "matplotlib",
     "numpy",
+    "pymongo",  # used by HZDR/LabFrog context helpers for MongoDB access
     "pyyaml",
     "requests",
-    "supervisor",
-    "termcolor"
+    "supervisor"
 ]
 gui = [
     "adeqt",
     "fonticon-fontawesome6",
+    "kafka-python",  # imported by the GUI update listener during startup
     "mplcursors",
     "mpl-pan-zoom",
     "natsort",
     "openpyxl",  # for spreadsheet export
     "PyQt5",
+    "PyQt5-Qt5==5.15.2; platform_system == 'Windows'",
     "PyQtWebEngine",
+    "PyQtWebEngine-Qt5==5.15.2; platform_system == 'Windows'",
     "pyflakes",  # for checking context file in editor
-    "QScintilla==2.13",
+    "QScintilla==2.14.1",
     "scikit-learn",
     "superqt",
     "tabulate",  # used in pandas to make markdown tables (for Zulip)
