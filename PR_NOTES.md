@@ -28,7 +28,7 @@ This PR prepares DAMNIT for an HZDR-style deployment where users open DAMNIT fol
   - `requires-python` is now `>=3.11` to match the dependency floor.
   - GUI extras include Kafka, Windows-compatible Qt runtime pins, and `QScintilla==2.14.1`.
   - `pymongo` is included for MongoDB context helpers.
-  - Unix-only permission handling is guarded on Windows.
+  - Unix-only permission handling is guarded on Windows across database, result-writing, log, and backend helper paths.
   - XFEL-only `extra_data` / `extra_proposal` imports are lazy so HZDR GUI startup is not blocked by their Unix-specific import chain.
 
 ## How To Try It
@@ -52,17 +52,10 @@ Edit `.damnit.env` locally for real HZDR Kafka/MongoDB endpoints. `.damnit.env` 
   - `DamnitDB.from_dir()` initializes on Windows.
   - HZDR open dialog hides proposal controls from repo/starter config.
   - Root and starter site configs expand Kafka/MongoDB values from `.damnit.env`.
+  - `damnit sample-data ... --proposal 1` generates and ingests synthetic runs on Windows.
 
 ## Caveats
 
 - Running `damnit gui` from an arbitrary directory still requires a nearby `damnit-site.json` or `DAMNIT_SITE_CONFIG` pointing to one.
 - `.damnit.env` is local-only and may contain secrets; do not commit it.
 - Detailed work log and intermediate validation history are in `STATUS_NOTES.md`.
-
-## Suggested Commit Split
-
-- `build(pyproject): make gui extra install Windows Qt and Kafka dependencies`
-- `fix(backend): guard Unix-only permission handling on Windows`
-- `fix(ctxrunner): lazy-load XFEL-only context dependencies`
-- `feat(gui): support HZDR folder-based startup`
-- `feat(config): add HZDR site defaults and starter site`

@@ -7,7 +7,7 @@ import subprocess
 import configparser
 from pathlib import Path
 
-from .db import db_path, DamnitDB
+from .db import db_path, DamnitDB, _chmod_if_owned
 
 
 log = logging.getLogger(__name__)
@@ -85,8 +85,7 @@ def write_supervisord_conf(root_path):
     with open(config_path, "w") as f:
         config.write(f)
 
-    if config_path.stat().st_uid == os.getuid():
-        os.chmod(config_path, 0o666)
+    _chmod_if_owned(config_path, 0o666)
 
 def start_listener(root_path: Path, try_again=True):
     config_path = root_path / "supervisord.conf"

@@ -16,7 +16,7 @@ from secrets import token_hex
 from threading import Thread
 from uuid import uuid4
 
-from .db import DamnitDB
+from .db import DamnitDB, _chmod_if_owned
 from ..context import RunData
 from ..site_config import find_proposal_dir
 
@@ -47,11 +47,9 @@ def process_log_path(run, proposal, ctx_dir=Path('.'), create=True):
     p = ctx_dir.absolute() / 'process_logs' / f"r{run}-p{proposal}.out"
     if create:
         p.parent.mkdir(exist_ok=True)
-        if p.parent.stat().st_uid == os.getuid():
-            p.parent.chmod(0o777)
+        _chmod_if_owned(p.parent, 0o777)
         p.touch(exist_ok=True)
-        if p.stat().st_uid == os.getuid():
-            p.chmod(0o666)
+        _chmod_if_owned(p, 0o666)
     return p
 
 
@@ -222,8 +220,7 @@ class ExtractionSubmitter:
             grpid = token_hex(8)   # random unique string
             scripts_dir = self.context_dir / '.tmp'
             scripts_dir.mkdir(exist_ok=True)
-            if scripts_dir.stat().st_uid == os.getuid():
-                scripts_dir.chmod(0o777)
+            _chmod_if_owned(scripts_dir, 0o777)
 
             for i, req in enumerate(req_group):
                 script_file = scripts_dir / f'launch-{grpid}-{i}.sh'

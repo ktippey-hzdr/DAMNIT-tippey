@@ -28,7 +28,7 @@ from kafka import KafkaProducer
 
 from ..context import ContextFile, RunData
 from ..site_config import get_file_submit_topic, get_update_brokers
-from .db import DamnitDB, ReducedData, BlobTypes, MsgKind, msg_dict
+from .db import DamnitDB, ReducedData, BlobTypes, MsgKind, msg_dict, _chmod_if_owned
 from .extraction_control import ExtractionRequest, ExtractionSubmitter
 
 log = logging.getLogger(__name__)
@@ -316,8 +316,7 @@ class RunExtractor(Extractor):
     def extract_and_ingest(self):
         self._notify_running()
         self.out_path.parent.mkdir(parents=True, exist_ok=True)
-        if self.out_path.parent.stat().st_uid == os.getuid():
-            os.chmod(self.out_path.parent, 0o777)
+        _chmod_if_owned(self.out_path.parent, 0o777)
 
         self.extract_in_subprocess()
 

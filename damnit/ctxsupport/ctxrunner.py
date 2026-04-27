@@ -40,6 +40,15 @@ log = logging.getLogger("ctxrunner")
 THUMBNAIL_SIZE = 300 # px
 
 
+def _chmod_if_owned(path: Path, mode: int):
+    """Apply Unix permissions only when ownership checks are available."""
+    getuid = getattr(os, "getuid", None)
+    if getuid is None:
+        return
+    if path.stat().st_uid == getuid():
+        os.chmod(path, mode)
+
+
 def _missing_optional_dependency(package_name, import_error):
     """Return a function that reports an optional XFEL dependency when used."""
     def raise_import_error(*args, **kwargs):
@@ -646,8 +655,7 @@ def add_to_h5_file(path) -> h5py.File:
         finally:
             f.close()
 
-            if os.stat(path).st_uid == os.getuid():
-                os.chmod(path, 0o666)
+            _chmod_if_owned(path, 0o666)
     elif ex is not None:
         # This should only be reached after all attempts to open the file failed
         raise ex

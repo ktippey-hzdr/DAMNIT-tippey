@@ -663,6 +663,7 @@ da-dev@xfel.eu"""
         )
 
         try:
+            # Resolve preview from the currently opened DB + run selection.
             preview = RunVariables(self.context_dir, run)[quantity].preview_data()
         except FileNotFoundError:
             self.show_status_message(f"Couldn't get run variables for p{proposal}, r{run}",

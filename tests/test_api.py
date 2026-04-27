@@ -1,3 +1,4 @@
+import json
 import subprocess
 from pathlib import Path
 from textwrap import dedent
@@ -10,7 +11,9 @@ from matplotlib.image import AxesImage
 from plotly.graph_objects import Figure as PlotlyFigure
 
 from damnit import Damnit, RunVariables
+from damnit.backend.db import initialize_proposal
 from damnit.context import ContextFile
+from damnit.sample_data import generate_sample_data
 from .helpers import extract_mock_run
 
 
@@ -192,3 +195,20 @@ def test_api_dependencies(venv):
     # Test that we can import the module successfully and don't accidentally
     # depend on other things.
     subprocess.run([str(venv.python), "-c", "import damnit"], check=True)
+
+
+def test_run_variables_preview_in_folder_based_mode(tmp_path):
+    """RunVariables should resolve proposal from run_info when metameta omits it."""
+    db_dir = tmp_path / "folder_site"
+    db_dir.mkdir()
+    (db_dir / "damnit-site.json").write_text(
+        json.dumps({"lab": {"proposal_required": False}})
+    )
+    initialize_proposal(db_dir, proposal=None)
+    generate_sample_data(db_dir, runs=1, start_run=1, proposal=1)
+
+    run_vars = RunVariables(db_dir, 1)
+    preview = run_vars["sample.image"].preview_data()
+
+    assert isinstance(preview, np.ndarray)
+    assert preview.shape == (64, 64)

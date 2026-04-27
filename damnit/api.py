@@ -288,12 +288,34 @@ class RunVariables:
     ```
     """
 
-    def __init__(self, db_dir, run):
+    def __init__(self, db_dir, run, proposal=None):
         self._db = DamnitDB.from_dir(db_dir)
-        self._proposal = self._db.metameta["proposal"]
         self._run = run
+        self._proposal = self._resolve_proposal(proposal)
         self._data_format_version = self._db.metameta["data_format_version"]
         self._h5_path = Path(db_dir) / f"extracted_data/p{self._proposal}_r{self._run}.h5"
+
+    def _resolve_proposal(self, proposal):
+        """Resolve a proposal for this run, including folder-based HZDR sites."""
+        if proposal is not None:
+            return proposal
+
+        # Prefer explicit database metadata when available.
+        if (configured_proposal := self._db.metameta.get("proposal")) is not None:
+            return configured_proposal
+
+        # Folder-based databases may omit metameta["proposal"]; resolve from runs.
+        rows = self._db.conn.execute(
+            "SELECT DISTINCT proposal FROM run_info WHERE run=? ORDER BY proposal",
+            (self._run,),
+        ).fetchall()
+        if len(rows) == 1:
+            return rows[0][0]
+        if len(rows) == 0:
+            raise KeyError(f"Run {self._run} not found in run_info")
+        raise ValueError(
+            f"Run {self._run} exists under multiple proposals; pass proposal explicitly."
+        )
 
     @property
     def proposal(self) -> int:
@@ -361,8 +383,14 @@ class RunVariables:
     def _var_titles(self):
         result = self._db.conn.execute("SELECT name, title FROM variables").fetchall()
         available_vars = self.keys()
-        titles = { row[0]: row[1] if row[1] is not None else row[0] for row in result
-                   if row[0] in available_vars }
+        # Default to using the variable name, even if it's not registered in
+        # the variables table (e.g. synthetic sample-data keys).
+        titles = {name: name for name in available_vars}
+        titles.update({
+            row[0]: (row[1] if row[1] is not None else row[0])
+            for row in result
+            if row[0] in available_vars
+        })
 
         # These variables are created automatically, but they aren't included in
         # the `variables` table (yet) so we need to explicitly add their titles.
@@ -441,15 +469,26 @@ class Damnit:
             raise TypeError(f"Unrecognised key type: {type(obj)}")
 
         if run not in self.runs():
-            raise KeyError(f"Unknown run number for p{self.proposal}")
+            proposal = self.proposal
+            if proposal is None:
+                raise KeyError(f"Unknown run number: {run}")
+            raise KeyError(f"Unknown run number for p{proposal}")
 
         run_vars = RunVariables(self._db_dir, run)
         return run_vars[variable] if variable is not None else run_vars
 
     @property
-    def proposal(self) -> int:
-        """The currently active proposal of the database."""
-        return self._db.metameta["proposal"]
+    def proposal(self):
+        """The currently active proposal, or None for ambiguous folder-based DBs."""
+        if (configured_proposal := self._db.metameta.get("proposal")) is not None:
+            return configured_proposal
+
+        rows = self._db.conn.execute(
+            "SELECT DISTINCT proposal FROM run_info ORDER BY proposal"
+        ).fetchall()
+        if len(rows) == 1:
+            return rows[0][0]
+        return None
 
     def runs(self) -> list:
         """A list of all existing runs.

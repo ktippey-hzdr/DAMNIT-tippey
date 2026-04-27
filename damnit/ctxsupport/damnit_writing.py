@@ -14,6 +14,16 @@ OBJTYPE_ATTR = '_damnit_objtype'
 THUMBNAIL_SIZE = 300 # px
 COMPRESSION_OPTS = {'compression': 'gzip', 'compression_opts': 1, 'shuffle': True}
 
+
+def _chmod_if_owned(path: Path, mode: int):
+    """Apply Unix permissions only when ownership checks are available."""
+    getuid = getattr(os, "getuid", None)
+    if getuid is None:
+        return
+    if path.stat().st_uid == getuid():
+        os.chmod(path, mode)
+
+
 if "AMORE_BROKER" in os.environ:
     UPDATE_BROKERS = [os.environ["AMORE_BROKER"]]
 else:
@@ -294,8 +304,7 @@ def save_fragment(damnit_dir: Path, proposal: int, run: int, vars: dict[str, Cel
     """Save one or more results into a fragment file, to be combined later"""
     results_dir = damnit_dir / "extracted_data"
     results_dir.mkdir(parents=True, exist_ok=True)
-    if results_dir.stat().st_uid == os.getuid():
-        os.chmod(results_dir, 0o777)
+    _chmod_if_owned(results_dir, 0o777)
 
     with atomic_create_h5(dir=results_dir, prefix=f"p{proposal}_r{run}.") as f:
         f.attrs["provenance"] = provenance

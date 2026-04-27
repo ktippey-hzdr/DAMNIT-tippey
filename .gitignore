@@ -158,6 +158,8 @@ cython_debug/
 #.idea/
 
 *.sqlite
+extracted_data/
+process_logs/
 
 #VIM swp files
 *.swp
