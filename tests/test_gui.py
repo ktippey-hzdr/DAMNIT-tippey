@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytest
+from kafka.errors import NoBrokersAvailable
 from PyQt5.QtCore import Qt, QPoint
 from PyQt5.QtGui import QColor, QPalette, QPixmap
 from PyQt5 import QtGui, QtWidgets
@@ -69,6 +70,24 @@ def test_connect_to_kafka(mock_db, qtbot):
         qtbot.addWidget(win, before_close_func=lambda _: win.stop_update_listener_thread())
         kafka_cns.assert_called_once()
         kafka_prd.assert_called_once()
+
+
+def test_main_window_without_kafka_agent_does_not_crash(mock_db, qtbot, monkeypatch):
+    """Kafka publish paths should be no-ops if broker setup failed at startup."""
+    db_dir, db = mock_db
+    monkeypatch.chdir(db_dir)
+
+    with patch("damnit.gui.main_window.UpdateAgent", side_effect=NoBrokersAvailable()), \
+         patch.object(QMessageBox, "warning", return_value=QMessageBox.Ok):
+        win = MainWindow(db_dir, True)
+    qtbot.addWidget(win)
+
+    assert win.update_agent is None
+
+    var_name = f"manual_{uuid4().hex[:8]}"
+    win.add_variable(var_name, "Manual Field", "string")
+    win.save_value(db.metameta["proposal"], 1, "comment", "offline")
+    win.stop_update_listener_thread()
 
 def test_editor(mock_db, mock_ctx, qtbot):
     db_dir, db = mock_db
@@ -1177,6 +1196,31 @@ def test_precreate_runs(mock_db_with_data, qtbot, monkeypatch):
         win.precreate_runs_dialog()
         dialog.assert_called_once()
         assert get_n_runs() == n_runs + 1
+
+
+def test_inspect_empty_timestamp_is_noop(mock_db, qtbot, monkeypatch):
+    """Double-clicking an empty timestamp cell should not try to open a preview."""
+    db_dir, db = mock_db
+    monkeypatch.chdir(db_dir)
+
+    win = MainWindow(db_dir, connect_to_kafka=False)
+    qtbot.addWidget(win)
+    win.table.precreate_runs(1)
+
+    timestamp_col = win.table.find_column("Timestamp", by_title=True)
+    empty_timestamp_index = None
+    for row_ix in range(win.table.rowCount()):
+        cell_index = win.table.index(row_ix, timestamp_col)
+        if win.table.data(cell_index, role=Qt.DisplayRole) in ("", None):
+            empty_timestamp_index = cell_index
+            break
+
+    assert empty_timestamp_index is not None
+    canvases_before = len(win._canvas_inspect)
+    with patch.object(QMessageBox, "warning") as warning:
+        win.inspect_data(empty_timestamp_index)
+        warning.assert_not_called()
+    assert len(win._canvas_inspect) == canvases_before
 
 
 def test_tag_filtering(mock_db_with_data, mock_ctx, qtbot):

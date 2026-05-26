@@ -189,6 +189,10 @@ class EventProcessor:
     def handle_run_corrections_complete(self, record, msg: dict):
         self.handle_event(record, msg, RunData.PROC)
 
+    def handle_hzdr_run_complete(self, record, msg: dict):
+        """Handle a generic HZDR run-ready event from Kafka."""
+        self.handle_event(record, msg, RunData.ALL)
+
     def handle_event(self, record, msg: dict, run_data: RunData):
         proposal = int(msg['proposal'])
         run = int(msg['run'])

@@ -68,6 +68,8 @@ class MainWindow(QtWidgets.QMainWindow):
         super().__init__()
 
         self._connect_to_kafka = connect_to_kafka
+        # Set eagerly so all code paths can safely test for an active agent.
+        self.update_agent = None
         self._updates_thread = None
         self._received_update = False
         self._context_path = None
@@ -141,11 +143,18 @@ class MainWindow(QtWidgets.QMainWindow):
         super().closeEvent(event)
 
     def stop_update_listener_thread(self):
-        if self._updates_thread is not None:
+        """Stop the Kafka listener thread and clear listener handles safely."""
+        if self.update_agent is not None:
             self.update_agent.stop()
+        if self._updates_thread is not None:
             self._updates_thread.exit()
             self._updates_thread.wait()
             self._updates_thread = None
+        self.update_agent = None
+
+    def _can_send_kafka_updates(self) -> bool:
+        """Return True when GUI-originated update messages can be published."""
+        return self._connect_to_kafka and (self.update_agent is not None)
 
     def center_window(self):
         """
@@ -367,7 +376,7 @@ da-dev@xfel.eu"""
         self.table_view.add_new_columns([title], [True], [before_pos - n_static_cols - 1])
         self.table.add_editable_column(name)
 
-        if self._connect_to_kafka:
+        if self._can_send_kafka_updates():
             self.update_agent.variable_set(name, title, description, variable_type)
 
     def open_column_dialog(self):
@@ -652,8 +661,8 @@ da-dev@xfel.eu"""
         quantity_title = self.table.column_title(index.column())
         quantity = self.table.column_id(index.column())
 
-        # Don't try to plot strings
-        if quantity in { "Status" } | self.table.editable_columns:
+        # Static metadata columns don't have inspectable preview payloads.
+        if quantity in {"Status", "start_time"} | self.table.editable_columns:
             return
 
         log.info(
@@ -958,7 +967,7 @@ da-dev@xfel.eu"""
 
         log.debug("Saving data for variable %s for prop %d run %d", name, prop, run)
         self.db.set_variable(prop, run, name, ReducedData(value), provenance="manual-input")
-        if self._connect_to_kafka:
+        if self._can_send_kafka_updates():
             self.update_agent.run_values_updated(prop, run, name)
 
     def check_zulip_messenger(self):
@@ -1019,7 +1028,7 @@ da-dev@xfel.eu"""
                 self.show_status_message(
                     f"Launched processing for {len(reqs)} runs", 10_000
                 )
-                if self._connect_to_kafka:
+                if self._can_send_kafka_updates():
                     for req, (job_id, cluster) in zip(reqs, submitted):
                         self.update_agent.processing_submitted(
                             req.submitted_info(cluster, job_id)

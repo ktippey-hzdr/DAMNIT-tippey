@@ -1,0 +1,78 @@
+{
+  "database": "shotsheet",
+  "collection": "shots",
+  "documents": [
+    {
+      "run": 1,
+      "shot_number": 1001,
+      "fired_at": "2026-05-01T09:10:00+00:00",
+      "signal": 0.5,
+      "status": "ok",
+      "target": "target-1"
+    },
+    {
+      "run": 1,
+      "shot_number": 1002,
+      "fired_at": "2026-05-01T09:11:00+00:00",
+      "signal": 0.6,
+      "status": "ok",
+      "target": "target-1"
+    },
+    {
+      "run": 1,
+      "shot_number": 1003,
+      "fired_at": "2026-05-01T09:12:00+00:00",
+      "signal": 0.7,
+      "status": "needs-review",
+      "target": "target-1"
+    },
+    {
+      "run": 2,
+      "shot_number": 2001,
+      "fired_at": "2026-05-01T09:20:00+00:00",
+      "signal": 1.0,
+      "status": "ok",
+      "target": "target-2"
+    },
+    {
+      "run": 2,
+      "shot_number": 2002,
+      "fired_at": "2026-05-01T09:21:00+00:00",
+      "signal": 1.1,
+      "status": "ok",
+      "target": "target-2"
+    },
+    {
+      "run": 2,
+      "shot_number": 2003,
+      "fired_at": "2026-05-01T09:22:00+00:00",
+      "signal": 1.2,
+      "status": "needs-review",
+      "target": "target-2"
+    },
+    {
+      "run": 3,
+      "shot_number": 3001,
+      "fired_at": "2026-05-01T09:30:00+00:00",
+      "signal": 1.5,
+      "status": "ok",
+      "target": "target-3"
+    },
+    {
+      "run": 3,
+      "shot_number": 3002,
+      "fired_at": "2026-05-01T09:31:00+00:00",
+      "signal": 1.6,
+      "status": "ok",
+      "target": "target-3"
+    },
+    {
+      "run": 3,
+      "shot_number": 3003,
+      "fired_at": "2026-05-01T09:32:00+00:00",
+      "signal": 1.7,
+      "status": "needs-review",
+      "target": "target-3"
+    }
+  ]
+}
